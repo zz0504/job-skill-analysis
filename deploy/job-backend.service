@@ -1,0 +1,22 @@
+[Unit]
+Description=Job Analysis Backend API Service
+After=network.target mysql.service redis.service
+Wants=mysql.service
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/job-analysis/backend
+Environment="PATH=/var/www/job-analysis/backend/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/var/www/job-analysis/backend"
+ExecStart=/var/www/job-analysis/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
