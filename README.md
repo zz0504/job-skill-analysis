@@ -52,7 +52,12 @@ job-skill-analysis/
 │   ├── nginx.conf         # 反向代理 + 静态资源缓存
 │   ├── job-backend.service# systemd 单元，失败自动重启
 │   ├── init.sh / deploy.sh# 环境初始化与一键部署
-│   └── .env.production
+│   ├── .env.production.example  # 明文模板（占位符）
+│   ├── .env.production.enc      # 真实配置的密文（口令解密）
+│   └── deploy.config
+├── tools/
+│   └── secretctl.py       # 敏感配置加解密工具
+├── secrets.list           # 需加密的文件清单
 └── 招聘岗位技能数据集_500条.xlsx   # 示例数据集
 ```
 
@@ -114,13 +119,42 @@ tail -f /var/log/nginx/job-analysis.error.log
 nginx -t && systemctl reload nginx
 ```
 
-## 安全说明
+## 安全与密钥管理
 
-仓库中**不包含任何真实凭据**。所有敏感配置以占位符形式出现：
+仓库中**不包含任何真实凭据**。两层防护：
 
-- `backend/.env`、`deploy/.env.production` 未纳入版本控制，请从 `.env.example` 复制后自行填写
-- `SECRET_KEY` 需替换为随机字符串：`python -c "import secrets;print(secrets.token_urlsafe(32))"`
-- 默认账号密码通过环境变量 `DEFAULT_ADMIN_PASSWORD` / `DEFAULT_TEST_PASSWORD` 注入，未硬编码
+1. **占位符**：代码里的密码一律改成占位符或从环境变量注入
+2. **配置加密**：含真实密码的文件以密文入库，明文永不提交
+
+### 加密工具
+
+仓库自带 `tools/secretctl.py`（PBKDF2-HMAC-SHA256 派生密钥，480000 轮迭代，Fernet 对称加密，随机 16 字节盐）。
+
+```bash
+pip install cryptography
+
+# 部署时：解密出明文（明文已被 .gitignore 排除）
+export SECRETS_PASSPHRASE='你的口令'
+python tools/secretctl.py decrypt-all      # 按 secrets.list 批量解密
+
+# 改完配置后：重新加密，只提交密文
+python tools/secretctl.py encrypt-all
+git add deploy/.env.production.enc && git commit -m "chore: 更新生产配置密文"
+```
+
+要点：
+
+- **口令不写进任何文件、不进版本库**，通过环境变量或交互输入传入
+- 需加密的文件登记在 `secrets.list`，当前为 `deploy/.env.production`
+- 仓库同时保留 `deploy/.env.production.example` 明文模板（全是占位符），方便照抄
+- 密文为纯文本（`SECF1:` 开头 + Base64），git diff 友好
+- **口令丢失即不可恢复**，务必存进密码管理器
+
+### 其他
+
+- `SECRET_KEY` 用随机串：`python -c "import secrets;print(secrets.token_urlsafe(32))"`
+- 默认账号密码通过 `DEFAULT_ADMIN_PASSWORD` / `DEFAULT_TEST_PASSWORD` 环境变量注入，未硬编码
+- 更大规模可迁移到 [SOPS](https://github.com/mozilla/sops) + age 或云厂商 KMS；本项目规模下口令加密已足够
 
 ## 待改进
 

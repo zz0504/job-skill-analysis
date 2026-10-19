@@ -11,6 +11,12 @@ env/
 .env.local
 .env.*.local
 !.env.example
+!.env.production.example
+
+# 明文生产配置：只提交 .enc 密文，明文由 tools/secretctl.py 解密得到
+deploy/.env.production
+deploy/.env.staging
+*.decrypted
 
 # Node
 node_modules/
